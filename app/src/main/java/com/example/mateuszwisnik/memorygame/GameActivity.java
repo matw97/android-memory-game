@@ -1,33 +1,55 @@
 package com.example.mateuszwisnik.memorygame;
 
-import android.os.Handler;
-import android.support.v7.app.AppCompatActivity;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.provider.MediaStore;
+import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.GridLayout;
 import android.view.View;
 import android.widget.Toast;
 
-
-import java.util.*;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Objects;
 
 public class GameActivity extends AppCompatActivity implements View.OnClickListener {
 
+    private static final int REQUEST_IMAGE_CAPTURE = 1;
     private int numberOfCards;
 
     private MemoryButton[] memoryButtons;
     private List<Integer> buttonLocations;
+    List<BitmapDrawable> buttonGraphics = new LinkedList<>();
 
     private MemoryButton selectedButton;
     private MemoryButton secondSelectedButton;
 
+    private int numberOfPhotosTaken = 0;
+
     private boolean isBusy = false;
+    private static int number;
+
+    GridLayout gridLayout;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game);
 
-        GridLayout gridLayout = findViewById(R.id.gridLayout);
+        gridLayout = findViewById(R.id.gridLayout);
+
+        Intent intent = getIntent();
+        gridLayout.setColumnCount(intent.getIntExtra(MainActivity.EXTRA_MESSAGE_COLUMNS, 0));
+        gridLayout.setRowCount(intent.getIntExtra(MainActivity.EXTRA_MESSAGE_ROWS, 0));
+        number = gridLayout.getColumnCount();
+        takePicture();
+    }
+
+    private void gameLogic() {
 
         int columns = gridLayout.getColumnCount();
         int rows = gridLayout.getRowCount();
@@ -36,29 +58,61 @@ public class GameActivity extends AppCompatActivity implements View.OnClickListe
 
         memoryButtons = new MemoryButton[numberOfCards];
 
-        List<Integer> buttonGraphics = new LinkedList<>();
-
         buttonLocations = new LinkedList<>();
-
-        buttonGraphics.add(R.drawable.button_1);
-        buttonGraphics.add(R.drawable.button_2);
-        buttonGraphics.add(R.drawable.button_3);
-        buttonGraphics.add(R.drawable.button_4);
-        buttonGraphics.add(R.drawable.button_5);
-        buttonGraphics.add(R.drawable.button_6);
-        buttonGraphics.add(R.drawable.button_7);
-        buttonGraphics.add(R.drawable.button_8);
 
         shuffleButtons();
 
         for(int r = 0; r < rows; r++) {
             for(int c = 0; c < columns; c++) {
-                MemoryButton memoryButton = new MemoryButton(this, r, c, buttonGraphics.get(buttonLocations.get(r * rows + c)));
+                MemoryButton memoryButton = new MemoryButton(this, r, c);
                 memoryButton.setId(View.generateViewId());
                 memoryButton.setOnClickListener(this);
                 memoryButtons[r * columns + c] = memoryButton;
                 gridLayout.addView(memoryButton);
             }
+        }
+
+        shufflePicturesForButtons();
+    }
+
+    private void shufflePicturesForButtons() {
+
+        Collections.shuffle(buttonGraphics);
+
+        for (int i = 0; i < numberOfCards; i++) {
+            memoryButtons[i].setFront(buttonGraphics.get(i));
+        }
+    }
+
+    private void takePicture() {
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if(intent.resolveActivity(getPackageManager()) != null) {
+            startActivityForResult(intent, REQUEST_IMAGE_CAPTURE);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
+            numberOfPhotosTaken++;
+            Bundle extras = data.getExtras();
+            final Bitmap photo = (Bitmap) Objects.requireNonNull(extras).get("data");
+
+            insertPhotoToArray(photo);
+        } else {
+            takePicture();
+        }
+    }
+
+    private void insertPhotoToArray(Bitmap photo) {
+        number--;
+        buttonGraphics.add(new BitmapDrawable(getResources(), photo));
+        buttonGraphics.add(new BitmapDrawable(getResources(), photo));
+
+        if (number > 0) {
+            takePicture();
+        } else {
+            gameLogic();
         }
     }
 
@@ -93,7 +147,7 @@ public class GameActivity extends AppCompatActivity implements View.OnClickListe
             return;
         }
 
-        if(selectedButton.getImageId() == memoryButton.getImageId()) {
+        if(selectedButton.getImage().getBitmap().equals(memoryButton.getImage().getBitmap())) {
             memoryButton.flip();
 
             memoryButton.setMatched(true);
