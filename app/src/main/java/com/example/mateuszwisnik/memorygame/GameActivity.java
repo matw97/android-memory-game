@@ -19,21 +19,16 @@ import java.util.Objects;
 public class GameActivity extends AppCompatActivity implements View.OnClickListener {
 
     private static final int REQUEST_IMAGE_CAPTURE = 1;
+    private int numberOfPhotosToBeTaken;
     private int numberOfCards;
-
-    private MemoryButton[] memoryButtons;
-    private List<Integer> buttonLocations;
-    List<BitmapDrawable> buttonGraphics = new LinkedList<>();
-
-    private MemoryButton selectedButton;
-    private MemoryButton secondSelectedButton;
-
-    private int numberOfPhotosTaken = 0;
-
+    private int columns;
+    private int rows;
     private boolean isBusy = false;
-    private static int number;
-
-    GridLayout gridLayout;
+    private Card selectedCard;
+    private Card secondSelectedCard;
+    private Card[] cards;
+    List<BitmapDrawable> images = new LinkedList<>();
+    private GridLayout gridLayout;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,45 +37,39 @@ public class GameActivity extends AppCompatActivity implements View.OnClickListe
 
         gridLayout = findViewById(R.id.gridLayout);
 
-        Intent intent = getIntent();
-        gridLayout.setColumnCount(intent.getIntExtra(MainActivity.EXTRA_MESSAGE_COLUMNS, 0));
-        gridLayout.setRowCount(intent.getIntExtra(MainActivity.EXTRA_MESSAGE_ROWS, 0));
-        number = gridLayout.getColumnCount();
+        initVariables();
+
         takePicture();
     }
 
-    private void gameLogic() {
-
-        int columns = gridLayout.getColumnCount();
-        int rows = gridLayout.getRowCount();
-
+    private void initVariables() {
+        Intent intent = getIntent();
+        columns = intent.getIntExtra(MainActivity.EXTRA_MESSAGE_COLUMNS, 0);
+        rows = intent.getIntExtra(MainActivity.EXTRA_MESSAGE_ROWS, 0);
+        gridLayout.setColumnCount(columns);
+        gridLayout.setRowCount(rows);
+        numberOfPhotosToBeTaken = columns * rows / 2;
         numberOfCards = columns * rows;
-
-        memoryButtons = new MemoryButton[numberOfCards];
-
-        buttonLocations = new LinkedList<>();
-
-        shuffleButtons();
-
-        for(int r = 0; r < rows; r++) {
-            for(int c = 0; c < columns; c++) {
-                MemoryButton memoryButton = new MemoryButton(this, r, c);
-                memoryButton.setId(View.generateViewId());
-                memoryButton.setOnClickListener(this);
-                memoryButtons[r * columns + c] = memoryButton;
-                gridLayout.addView(memoryButton);
-            }
-        }
-
-        shufflePicturesForButtons();
+        cards = new Card[numberOfCards];
     }
 
-    private void shufflePicturesForButtons() {
+    private void dynamicallyCreateCards() {
+        for(int r = 0; r < rows; r++) {
+            for(int c = 0; c < columns; c++) {
+                Card card = new Card(this, r, c);
+                card.setId(View.generateViewId());
+                card.setOnClickListener(this);
+                cards[r * columns + c] = card;
+                gridLayout.addView(card);
+            }
+        }
+    }
 
-        Collections.shuffle(buttonGraphics);
+    private void shuffleImages() {
+        Collections.shuffle(images);
 
         for (int i = 0; i < numberOfCards; i++) {
-            memoryButtons[i].setFront(buttonGraphics.get(i));
+            cards[i].setFront(images.get(i));
         }
     }
 
@@ -94,35 +83,25 @@ public class GameActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            numberOfPhotosTaken++;
             Bundle extras = data.getExtras();
             final Bitmap photo = (Bitmap) Objects.requireNonNull(extras).get("data");
-
-            insertPhotoToArray(photo);
+            addImageToContainer(photo);
         } else {
             takePicture();
         }
     }
 
-    private void insertPhotoToArray(Bitmap photo) {
-        number--;
-        buttonGraphics.add(new BitmapDrawable(getResources(), photo));
-        buttonGraphics.add(new BitmapDrawable(getResources(), photo));
+    private void addImageToContainer(Bitmap photo) {
+        numberOfPhotosToBeTaken--;
+        images.add(new BitmapDrawable(getResources(), photo));
+        images.add(new BitmapDrawable(getResources(), photo));
 
-        if (number > 0) {
+        if (numberOfPhotosToBeTaken > 0) {
             takePicture();
         } else {
-            gameLogic();
+            dynamicallyCreateCards();
+            shuffleImages();
         }
-    }
-
-    private void shuffleButtons() {
-
-        for(int i = 0; i<numberOfCards; i++) {
-            buttonLocations.add(i % numberOfCards / 2);
-        }
-
-        Collections.shuffle(buttonLocations);
     }
 
     @Override
@@ -131,64 +110,71 @@ public class GameActivity extends AppCompatActivity implements View.OnClickListe
             return;
         }
 
-        MemoryButton memoryButton = (MemoryButton) v;
+        Card card = (Card) v;
 
-        if(memoryButton.isMatched()) {
+        if(card.isMatched()) {
             return;
         }
 
-        if(selectedButton == null) {
-            selectedButton = memoryButton;
-            selectedButton.flip();
+        if(selectedCard == null) {
+            selectedCard = card;
+            selectedCard.flip();
             return;
         }
 
-        if(selectedButton.getId() == memoryButton.getId()) {
+        if(selectedCard.getId() == card.getId()) {
             return;
         }
 
-        if(selectedButton.getImage().getBitmap().equals(memoryButton.getImage().getBitmap())) {
-            memoryButton.flip();
-
-            memoryButton.setMatched(true);
-            selectedButton.setMatched(true);
-
-            selectedButton.setEnabled(false);
-            memoryButton.setEnabled(false);
-
-            selectedButton = null;
-
+        if(selectedCard.getImage().getBitmap().equals(card.getImage().getBitmap())) {
+            pairFound(card);
             if(shouldGameEnd()) {
-                Toast.makeText(this, "Congrats! You have won!", Toast.LENGTH_SHORT).show();
-                finish();
-                startActivity(getIntent());
+                endGame();
             }
-
         } else {
-            secondSelectedButton = memoryButton;
-            secondSelectedButton.flip();
-            isBusy = true;
-
-            final Handler handler = new Handler();
-
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    secondSelectedButton.flip();
-                    selectedButton.flip();
-                    secondSelectedButton = null;
-                    selectedButton = null;
-                    isBusy = false;
-                }
-            }, 1000);
+            pairNotFound(card);
         }
+    }
 
+    private void pairFound(Card card) {
+        card.flip();
+
+        card.setMatched();
+        selectedCard.setMatched();
+
+        selectedCard.setEnabled(false);
+        card.setEnabled(false);
+
+        selectedCard = null;
+    }
+
+    private void pairNotFound(Card card) {
+        secondSelectedCard = card;
+        secondSelectedCard.flip();
+        isBusy = true;
+
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                secondSelectedCard.flip();
+                selectedCard.flip();
+                secondSelectedCard = null;
+                selectedCard = null;
+                isBusy = false;
+            }
+        }, 1000);
+    }
+
+    private void endGame() {
+        Toast.makeText(this, "Congrats! You have won!", Toast.LENGTH_SHORT).show();
+        finish();
+        startActivity(getIntent());
     }
 
     private boolean shouldGameEnd() {
         List<Boolean> booleans = new LinkedList<>();
-        for(MemoryButton memoryButton : memoryButtons) {
-            booleans.add(memoryButton.isMatched());
+        for(Card card : cards) {
+            booleans.add(card.isMatched());
         }
         return areAllTrue(booleans);
     }

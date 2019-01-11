@@ -5,10 +5,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.widget.GridLayout;
 
-class MemoryButton extends android.support.v7.widget.AppCompatButton {
-
-    private final int row;
-    private final int col;
+class Card extends android.support.v7.widget.AppCompatButton {
 
     private boolean isFlipped = false;
     private boolean isMatched = false;
@@ -16,10 +13,8 @@ class MemoryButton extends android.support.v7.widget.AppCompatButton {
     private BitmapDrawable front;
     private final Drawable back;
 
-    MemoryButton(Context context, int row, int col) {
+    Card(Context context, int row, int col) {
         super(context);
-        this.row = row;
-        this.col = col;
         this.back = context.getDrawable(R.drawable.button_question_mark);
 
         setBackground(back);
@@ -34,8 +29,8 @@ class MemoryButton extends android.support.v7.widget.AppCompatButton {
         return isMatched;
     }
 
-    void setMatched(boolean matched) {
-        isMatched = matched;
+    void setMatched() {
+        isMatched = true;
     }
 
     BitmapDrawable getImage() {
@@ -58,5 +53,4 @@ class MemoryButton extends android.support.v7.widget.AppCompatButton {
             isFlipped = true;
         }
     }
-
 }
